@@ -1,0 +1,88 @@
+name: smartfix
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: smartfix-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-smartfix_local}
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${DB_PASSWORD:-smartfix_local}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - smartfix-net
+
+  auth-service:
+    build: ../smartfix-auth-service_1
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/smartfix_auth
+      DB_USERNAME: root
+      DB_PASSWORD: ${DB_PASSWORD:-smartfix_local}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - smartfix-net
+
+  equipment-service:
+    build: ../smartfix-equipment-service_2
+    environment:
+      SERVER_PORT: 8082
+      DB_URL: jdbc:mysql://mysql:3306/smartfix_equipment
+      DB_USERNAME: root
+      DB_PASSWORD: ${DB_PASSWORD:-smartfix_local}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - smartfix-net
+
+  incident-service:
+    build: ../smartfix-incident-service_3
+    environment:
+      SERVER_PORT: 8083
+      DB_URL: jdbc:mysql://mysql:3306/smartfix_incidentes_db
+      DB_USERNAME: root
+      DB_PASSWORD: ${DB_PASSWORD:-smartfix_local}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - smartfix-net
+
+  maintenance-service:
+    build: ../smartfix-maintenance-service_4
+    environment:
+      PORT: 8084
+      DB_URL: jdbc:mysql://mysql:3306/smartfix_maintenance
+      DB_USERNAME: root
+      DB_PASSWORD: ${DB_PASSWORD:-smartfix_local}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - smartfix-net
+
+  frontend:
+    build: ../smartfix-frontend_5
+    ports:
+      - "4200:80"
+    depends_on:
+      - auth-service
+      - equipment-service
+      - incident-service
+      - maintenance-service
+    networks:
+      - smartfix-net
+
+networks:
+  smartfix-net:
+    driver: bridge
+
+volumes:
+  mysql-data:
